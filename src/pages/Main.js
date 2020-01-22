@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
-
+import { Image, View, KeyboardAvoidingView, Text, TextInput, TouchableOpacity } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { requestPermissionsAsync, getCurrentPositionAsync } from 'expo-location';
+import MapView, { Marker, Callout } from 'react-native-maps';
 
-import MapView from 'react-native-maps';
+import styles from './styles';
+import api from '../services/api';
 
-function Main() {
+function Main({ navigation }) {
+    const [ devs, setDevs ] = useState([]);
     const [ currentRegion, setCurrentRegion ] = useState(null);
+    const [ techs, setTechs ] = useState('');
     
     useEffect(() => {
         async function loadInitialPosition() {
@@ -19,6 +23,7 @@ function Main() {
 
                 const { latitude, longitude } = coords;
 
+                
                 setCurrentRegion({
                     latitude,
                     longitude,
@@ -27,7 +32,7 @@ function Main() {
                 })
             }
         }
-    
+        
         loadInitialPosition();
     }, [])
 
@@ -35,15 +40,68 @@ function Main() {
         return null;
     }
 
+    function handleRegionChanged(region) {
+        setCurrentRegion(region);
+    }
+
+    async function loadDevs() {
+        const { latitude, longitude } = currentRegion;
+
+        const response = await api.get('/search', {
+            params: {
+                latitude,
+                longitude,
+                techs,
+            }
+        });
+
+        setDevs(response.data.devs);
+    }
+
     return (
-        <MapView initialRegion={currentRegion} style={styles.map} />
+        <>
+            <MapView onRegionChangeComplete={handleRegionChanged} initialRegion={currentRegion} style={styles.map}>
+                {devs.map(dev => (
+                    <Marker
+                    key={dev._id}
+                    coordinate={{
+                        latitude: dev.location.coordinates[1],
+                        longitude: dev.location.coordinates[0]
+                    }}>
+                        <Image style={styles.avatar} source={{uri: dev.avatar_url}} />
+
+                        <Callout onPress={() => {
+                            navigation.navigate('Profile', { github_username: dev.github_username })
+                        }} >
+                            <View style={styles.callout}>
+                                <Text style={styles.devName}>{dev.name}</Text>
+                                <Text style={styles.devBio}>{dev.bio}</Text>
+                                <Text style={styles.devTechs}>{dev.techs.join(', ')}</Text>
+                            </View>
+                        </Callout>
+                    </Marker>
+                ))}
+            </MapView>
+            <KeyboardAvoidingView 
+                behavior='padding'
+                keyboardVerticalOffset={90}
+                style={styles.searchForm}
+            >
+                <TextInput 
+                    style={styles.searchInput}
+                    placeholder='Buscar devs por techs'
+                    placeholderTextColor='#666'
+                    autoCapitalize='words'
+                    autoCorrect={false}
+                    value={techs}
+                    onChangeText={setTechs}
+                />
+                <TouchableOpacity onPress={loadDevs} style={styles.loadButton}>
+                    <MaterialIcons name='my-location' size={20} color='#fff' />
+                </TouchableOpacity>
+            </KeyboardAvoidingView>
+        </>
     )
 }
-
-const styles = StyleSheet.create({
-    map: {
-        flex: 1,
-    }
-})
 
 export default Main;
